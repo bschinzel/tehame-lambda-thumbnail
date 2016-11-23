@@ -1,16 +1,12 @@
 package de.tehame.thumbnail;
 
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLDecoder;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import org.apache.log4j.Logger;
 
 import javax.imageio.ImageIO;
 
@@ -28,11 +24,10 @@ import com.mortennobel.imagescaling.ResampleOp;
 
 /**
  * AWS Lambda Function Handler: de.tehame.thumbnail.ThumbnailLambda::handleRequest
- * 
- * Dieses AWS Lambda basiert auf dem Beispiel aus folgendem Tutorial:
- * http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-java 
  */
 public class ThumbnailLambda implements RequestHandler<S3Event, String> {
+	
+	private static final Logger LOGGER = Logger.getLogger(ThumbnailLambda.class);
 	
 	/**
 	 * Der Name des Buckets mit original Photos.
@@ -49,8 +44,8 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	 */
 	private static final String THUMBNAIL_SUFFIX = "-thumbnail";
 	
-	private static final float MAX_WIDTH = 200;
-	private static final float MAX_HEIGHT = 200;
+	private static final int MAX_WIDTH = 200;
+	private static final int MAX_HEIGHT = 200;
 	
 	private static final String JPG_TYPE = "jpg";
 	private static final String JPG_MIME = "image/jpeg";
@@ -83,8 +78,12 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            String srcKey = record.getS3().getObject().getKey().replace('+', ' ');
 	            srcKey = URLDecoder.decode(srcKey, "UTF-8");
 	            
+	            LOGGER.debug("Source S3 Key: " + srcKey);
+	            
 	            // Der neue Key des Thumbnails bekommt das Suffix '-thumbnail'.
 	            String destKey = srcKey + THUMBNAIL_SUFFIX;
+	            
+	            LOGGER.debug("Destination S3 Key: " + destKey);
 	            
 	            // Lade nun die konkreten Daten aus S3
 	            AmazonS3 s3Client = new AmazonS3Client();
@@ -97,12 +96,25 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            int srcHeight = srcImage.getHeight();
 	            int srcWidth = srcImage.getWidth();
 	            
-	            int dWidth = (int) MAX_WIDTH / srcWidth;
-	            int dHeight = (int) MAX_HEIGHT / srcHeight;
+	            LOGGER.debug("Breite des Originals: " + srcWidth);
+	            LOGGER.debug("Höhe des Originals: " + srcHeight);
 	            
-	            int scale = Math.min(dWidth, dHeight);
+	            int destHeight = -1;
+	            int destWidth = -1;
 	            
-	            ResampleOp resizeOp = new ResampleOp(scale, scale);
+	            // Berechne die Länge für die kürzere Seite
+	            if (srcHeight < srcWidth) {
+	            	destHeight = MAX_HEIGHT;
+	            	destWidth = srcWidth * (MAX_HEIGHT / destHeight);
+	            } else {
+	            	destWidth = MAX_WIDTH;
+	            	destHeight = srcHeight * (MAX_WIDTH / destWidth);
+	            }
+	            
+	            LOGGER.debug("Breite des Thumbnails: " + destWidth);
+	            LOGGER.debug("Höhe des Thumbnails: " + destHeight);
+	            
+	            ResampleOp resizeOp = new ResampleOp(destWidth, destHeight);
 	            resizeOp.setFilter(ResampleFilters.getLanczos3Filter());
 	            BufferedImage scaledImage = resizeOp.filter(srcImage, null);
 	            
@@ -117,20 +129,20 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            meta.setContentType(JPG_MIME);
 	            
 	            // Uploading to S3 destination bucket
-	            System.out.println("Writing to: " + TEHAME_THUMBNAIL_BUCKET + "/" + destKey);
+	            LOGGER.debug("Writing to: " + TEHAME_THUMBNAIL_BUCKET + "/" + destKey);
 	            s3Client.putObject(TEHAME_THUMBNAIL_BUCKET, destKey, is, meta);
-	            System.out.println("Successfully resized " + srcBucket + "/"
+	            LOGGER.debug("Successfully resized " + srcBucket + "/"
 	                    + srcKey + " and uploaded to " + TEHAME_THUMBNAIL_BUCKET + "/" + destKey);
 	            return "Ok";
+			} else {
+				LOGGER.error("Falscher Source Bucket");
+				return "Falscher Source Bucket";
 			}
 			
-		} catch (IOException e) {
+		} catch (Exception e) {
 			// Mache aus der checked Exception eine Runtime Exception, 
 			// denn die Methode muss das Interface implementieren.
 			throw new RuntimeException(e);
 		}
-		
-		return null;
 	}
-
 }

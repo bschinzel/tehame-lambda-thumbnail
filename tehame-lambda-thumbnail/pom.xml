@@ -59,5 +59,11 @@
 		    <artifactId>java-image-scaling</artifactId>
 		    <version>0.8.6</version>
 		</dependency>
+		<!-- Siehe https://docs.aws.amazon.com/lambda/latest/dg/java-logging.html -->
+		<dependency>
+		    <groupId>com.amazonaws</groupId>
+		    <artifactId>aws-lambda-java-log4j</artifactId>
+		    <version>1.0.0</version>
+		</dependency>
 	</dependencies>
 </project>
