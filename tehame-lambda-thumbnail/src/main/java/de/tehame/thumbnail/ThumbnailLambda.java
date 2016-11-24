@@ -31,21 +31,25 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	
 	/**
 	 * Der Name des Buckets mit original Photos.
+	 * Die Umgebungsvariable wird in AWS Lambda definiert.
 	 */
-	private static final String TEHAME_PHOTO_BUCKET = "tehame";
+	private static final String TEHAME_PHOTO_BUCKET = 
+			System.getenv("TEHAME_PHOTO_BUCKET");
 	
 	/**
 	 * Der Name des Buckets mit Thumbnails der original Photos.
+	 * Die Umgebungsvariable wird in AWS Lambda definiert.
 	 */
-	private static final String TEHAME_THUMBNAIL_BUCKET = "tehame-thumbnails";
+	private static final String TEHAME_THUMBNAIL_BUCKET = 
+			System.getenv("TEHAME_THUMBNAIL_BUCKET");
 	
 	/**
 	 * Thumbnails im S3 bekommen ein eigenes Suffix im Key.
 	 */
 	private static final String THUMBNAIL_SUFFIX = "-thumbnail";
 	
-	private static final int MAX_WIDTH = 200;
-	private static final int MAX_HEIGHT = 200;
+	private static final double MAX_WIDTH = 200;
+	private static final double MAX_HEIGHT = 200;
 	
 	private static final String JPG_TYPE = "jpg";
 	private static final String JPG_MIME = "image/jpeg";
@@ -55,6 +59,7 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	 * @param ctx Die AWS Lambda Laufzeitumgebung.
 	 */
 	public String handleRequest(final S3Event s3event, final Context ctx) {
+		final long start = System.currentTimeMillis();
 		
 		try {
 			
@@ -91,6 +96,11 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            InputStream objectData = s3Object.getObjectContent();
 	            
 	            BufferedImage srcImage = ImageIO.read(objectData);
+	            // Aus der Doku:
+	            // "Close the input stream in Amazon S3 object as soon as possible"
+	            // Siehe http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/s3/AmazonS3Client.html
+	            // "Releases any underlying system resources. If the resources are already released then invoking this method has no effect."
+	            s3Object.close();
 	            
 	            // Der Skalierungsfaktor muss bestimmt werden
 	            int srcHeight = srcImage.getHeight();
@@ -99,22 +109,23 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            LOGGER.debug("Breite des Originals: " + srcWidth);
 	            LOGGER.debug("Höhe des Originals: " + srcHeight);
 	            
-	            int destHeight = -1;
-	            int destWidth = -1;
+	            Double destHeight = null;
+	            Double destWidth = null;
 	            
 	            // Berechne die Länge für die kürzere Seite
-	            if (srcHeight < srcWidth) {
+	            if (srcHeight > srcWidth) {
 	            	destHeight = MAX_HEIGHT;
-	            	destWidth = srcWidth * (MAX_HEIGHT / destHeight);
+	            	destWidth = srcWidth * (MAX_HEIGHT / (double) srcHeight);
 	            } else {
+	            	destHeight = srcHeight * (MAX_WIDTH / (double) srcWidth);
 	            	destWidth = MAX_WIDTH;
-	            	destHeight = srcHeight * (MAX_WIDTH / destWidth);
 	            }
 	            
-	            LOGGER.debug("Breite des Thumbnails: " + destWidth);
-	            LOGGER.debug("Höhe des Thumbnails: " + destHeight);
+	            LOGGER.debug("Breite des Thumbnails: " + destWidth.intValue());
+	            LOGGER.debug("Höhe des Thumbnails: " + destHeight.intValue());
 	            
-	            ResampleOp resizeOp = new ResampleOp(destWidth, destHeight);
+	            ResampleOp resizeOp = new ResampleOp(
+	            		destWidth.intValue(), destHeight.intValue());
 	            resizeOp.setFilter(ResampleFilters.getLanczos3Filter());
 	            BufferedImage scaledImage = resizeOp.filter(srcImage, null);
 	            
@@ -122,6 +133,7 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            ByteArrayOutputStream os = new ByteArrayOutputStream();
 	            ImageIO.write(scaledImage, JPG_TYPE, os);
 	            InputStream is = new ByteArrayInputStream(os.toByteArray());
+	            os.close();
 	            
 	            // Set Content-Length and Content-Type
 	            ObjectMetadata meta = new ObjectMetadata();
@@ -131,17 +143,23 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            // Uploading to S3 destination bucket
 	            LOGGER.debug("Writing to: " + TEHAME_THUMBNAIL_BUCKET + "/" + destKey);
 	            s3Client.putObject(TEHAME_THUMBNAIL_BUCKET, destKey, is, meta);
+	            is.close();
+	            
 	            LOGGER.debug("Successfully resized " + srcBucket + "/"
 	                    + srcKey + " and uploaded to " + TEHAME_THUMBNAIL_BUCKET + "/" + destKey);
+	            
+	            LOGGER.debug("Dauer " + (System.currentTimeMillis() - start) + "ms");
 	            return "Ok";
 			} else {
 				LOGGER.error("Falscher Source Bucket");
+				LOGGER.debug("Dauer " + (System.currentTimeMillis() - start) + "ms");
 				return "Falscher Source Bucket";
 			}
 			
 		} catch (Exception e) {
 			// Mache aus der checked Exception eine Runtime Exception, 
 			// denn die Methode muss das Interface implementieren.
+			LOGGER.debug("Dauer " + (System.currentTimeMillis() - start) + "ms");
 			throw new RuntimeException(e);
 		}
 	}
