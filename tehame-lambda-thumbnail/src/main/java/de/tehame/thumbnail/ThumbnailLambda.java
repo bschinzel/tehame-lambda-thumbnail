@@ -103,29 +103,25 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            s3Object.close();
 	            
 	            // Der Skalierungsfaktor muss bestimmt werden
-	            int srcHeight = srcImage.getHeight();
-	            int srcWidth = srcImage.getWidth();
+	            double srcHeight = (double) srcImage.getHeight();
+	            double srcWidth = (double) srcImage.getWidth();
 	            
 	            LOGGER.debug("Breite des Originals: " + srcWidth);
 	            LOGGER.debug("Höhe des Originals: " + srcHeight);
 	            
-	            Double destHeight = null;
-	            Double destWidth = null;
+	            // Hier liegt der Trick darin, die kleinste notwendige 
+	            // Skalierung zu finden.
+				double minScalar = this.calcMinScalar(
+						srcHeight, MAX_HEIGHT, srcWidth, MAX_WIDTH);
+
+				int destWidth = this.scale(srcWidth, minScalar);
+				int destHeight = this.scale(srcHeight, minScalar);
+				
+	            LOGGER.debug("Breite des Thumbnails: " + destWidth);
+	            LOGGER.debug("Höhe des Thumbnails: " + destHeight);
 	            
-	            // Berechne die Länge für die kürzere Seite
-	            if (srcHeight > srcWidth) {
-	            	destHeight = MAX_HEIGHT;
-	            	destWidth = srcWidth * (MAX_HEIGHT / (double) srcHeight);
-	            } else {
-	            	destHeight = srcHeight * (MAX_WIDTH / (double) srcWidth);
-	            	destWidth = MAX_WIDTH;
-	            }
+				ResampleOp resizeOp = new ResampleOp(destWidth, destHeight);
 	            
-	            LOGGER.debug("Breite des Thumbnails: " + destWidth.intValue());
-	            LOGGER.debug("Höhe des Thumbnails: " + destHeight.intValue());
-	            
-	            ResampleOp resizeOp = new ResampleOp(
-	            		destWidth.intValue(), destHeight.intValue());
 	            resizeOp.setFilter(ResampleFilters.getLanczos3Filter());
 	            BufferedImage scaledImage = resizeOp.filter(srcImage, null);
 	            
@@ -162,5 +158,36 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 			LOGGER.debug("Dauer " + (System.currentTimeMillis() - start) + "ms");
 			throw new RuntimeException(e);
 		}
+	}
+
+	/**
+	 * @param length Original Länge.
+	 * @param scalar Skalar.
+	 * @return Skalierte Dimension.
+	 */
+	public int scale(double length, double scalar) {
+		int scaled = (int) (length * scalar);
+		return scaled;
+	}
+
+	/**
+	 * @param srcHeight Höhe des Original Bildes.
+	 * @param srcWidth Breite des Original Bildes.
+	 * @param maxWidth Maximal erlaubte Breite.
+	 * @param maxHeight Maximal erlaubte Höhe.
+	 * 
+	 * @return Der Faktor, um den ein Bild skaliert werden muss, 
+	 *         damit es die maximale Breite und Höhe erfüllt und so groß wie möglich ist.
+	 */
+	public double calcMinScalar(
+			double srcHeight, double maxHeight, 
+			double srcWidth, double maxWidth) {
+		
+		double ratioH = maxHeight / srcHeight;
+		double ratioW = maxWidth / srcWidth;
+
+		double minRatio = Math.min(ratioH, ratioW);
+		
+		return minRatio;
 	}
 }

@@ -1,28 +1,23 @@
 package de.tehame.thumbnail;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class ThumbnailTest {
 
 	@Test
-	public void someTest() {
-		double MAX_HEIGHT = 200d;
-		double MAX_WIDTH = 200d;
+	public void skaliere() {
+		ThumbnailLambda t = new ThumbnailLambda();
 		
-		int srcHeight = 3435;
-		int srcWidth = 4353;
+		double srcHeight = 1080;
+		double srcWidth = 1920;
 		
-		int destHeight = 0;
-		int destWidth = 0;
+		double scalar = t.calcMinScalar(srcHeight, 200, srcWidth, 200);
 		
-        if (srcHeight > srcWidth) {
-        	destHeight = new Double(MAX_HEIGHT).intValue();
-        	destWidth = new Double(srcWidth * (MAX_HEIGHT / (double) srcHeight)).intValue();
-        } else {
-        	destWidth = new Double(MAX_WIDTH).intValue();
-        	destHeight = new Double(srcHeight * (MAX_WIDTH / (double) srcWidth)).intValue();
-        }
-        
-        System.out.println(destHeight);
-        System.out.println(destWidth);
+		// Bild ist breiter als hoch, deswegen wird 200 erwartet
+		Assert.assertEquals(200d, t.scale(srcWidth, scalar), 0d);
+		
+		// 200 / 1920 = 0,104166666666666...
+		// 1080 * 0,1041666666666667 = 112,5
+		Assert.assertEquals(112d, t.scale(srcHeight, scalar), 0d);
 	}
 }
