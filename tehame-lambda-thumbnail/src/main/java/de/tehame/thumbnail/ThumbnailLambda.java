@@ -165,7 +165,7 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	 * @param scalar Skalar.
 	 * @return Skalierte Dimension.
 	 */
-	public int scale(double length, double scalar) {
+	protected int scale(double length, double scalar) {
 		int scaled = (int) (length * scalar);
 		return scaled;
 	}
@@ -179,7 +179,7 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	 * @return Der Faktor, um den ein Bild skaliert werden muss, 
 	 *         damit es die maximale Breite und Höhe erfüllt und so groß wie möglich ist.
 	 */
-	public double calcMinScalar(
+	protected double calcMinScalar(
 			double srcHeight, double maxHeight, 
 			double srcWidth, double maxWidth) {
 		
