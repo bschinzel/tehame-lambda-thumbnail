@@ -43,11 +43,6 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	private static final String TEHAME_THUMBNAIL_BUCKET = 
 			System.getenv("TEHAME_THUMBNAIL_BUCKET");
 	
-	/**
-	 * Thumbnails im S3 bekommen ein eigenes Suffix im Key.
-	 */
-	private static final String THUMBNAIL_SUFFIX = "-thumbnail";
-	
 	private static final double MAX_WIDTH = 200;
 	private static final double MAX_HEIGHT = 200;
 	
@@ -85,8 +80,8 @@ public class ThumbnailLambda implements RequestHandler<S3Event, String> {
 	            
 	            LOGGER.debug("Source S3 Key: " + srcKey);
 	            
-	            // Der neue Key des Thumbnails bekommt das Suffix '-thumbnail'.
-	            String destKey = srcKey + THUMBNAIL_SUFFIX;
+	            // Der Original Key wird übernommen.
+	            String destKey = srcKey;
 	            
 	            LOGGER.debug("Destination S3 Key: " + destKey);
 	            
